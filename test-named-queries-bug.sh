@@ -22,8 +22,7 @@ retry_command() {
 
     while [[ $attempt -le $max_attempts ]]; do
         echo "Attempt $attempt of $max_attempts: Running command..."
-        eval "$cmd"
-        exit_code=$?
+        eval "$cmd" && exit_code=0 || exit_code=$?
         if [[ $exit_code -eq 0 ]]; then
             return 0
         else
@@ -32,7 +31,7 @@ retry_command() {
                 echo "Waiting ${wait_time} seconds before retry..."
                 sleep $wait_time
                 wait_time=$((wait_time * 2))
-                ((attempt++))
+                attempt=$((attempt + 1))
             else
                 echo "All $max_attempts attempts failed!"
                 return $exit_code
@@ -104,7 +103,7 @@ check_opensearch() {
             fi
             echo -n "."
             sleep 1
-            ((elapsed++))
+            elapsed=$((elapsed + 1))
         done
         echo ""
 
