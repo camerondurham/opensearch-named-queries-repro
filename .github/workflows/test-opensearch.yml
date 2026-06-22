@@ -1,0 +1,51 @@
+name: Test OpenSearch Named Queries Duplicate _name Bug
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        opensearch-version: ['1.3.20', '2.19.2', '3.1.0']
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install jq
+      run: sudo apt-get install -y jq
+
+    - name: Run test script
+      run: |
+        chmod +x ./test-named-queries-bug.sh
+        ./test-named-queries-bug.sh ${{ matrix.opensearch-version }}
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.opensearch-version }}
+        path: |
+          test-results.txt
+        retention-days: 14
+
+    - name: Check test results
+      run: |
+        if grep -q "BUG_STATUS=PRESENT" test-results.txt; then
+          echo "Expected behavior confirmed for OpenSearch ${{ matrix.opensearch-version }}: bug is still present."
+        elif grep -q "BUG_STATUS=FIXED" test-results.txt; then
+          echo "Unexpected change detected for OpenSearch ${{ matrix.opensearch-version }}: behavior appears fixed. Update README/assertions."
+          exit 1
+        else
+          echo "Unexpected test output for OpenSearch ${{ matrix.opensearch-version }}."
+          exit 1
+        fi
