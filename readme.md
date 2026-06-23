@@ -2,9 +2,9 @@
 
 [![Test OpenSearch Named Queries Duplicate _name](https://github.com/camerondurham/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml/badge.svg)](https://github.com/REPLACE_ME/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml)
 
-When two sibling clauses in the same `bool` query share the same `_name`, OpenSearch silently drops one clause at parse time. Any hit whose only matching named clause was the dropped one comes back with the `matched_queries` field entirely absent (the key is missing, not empty).
+When two sibling clauses in the same `bool` query share the same `_name`, OpenSearch drops one clause at parse time. Any hit whose only matching named clause was the dropped one comes back with the `matched_queries` field entirely absent (the key is missing, not empty).
 
-A passing badge means the pinned OpenSearch releases still exhibit this bug. CI treats `BUG_STATUS=PRESENT` as success; if behavior changes to `BUG_STATUS=FIXED` the workflow fails intentionally so this repo can be updated. Releases are pinned (not floating tags) so the badge reflects a stable reproduction.
+A passing badge means the pinned OpenSearch releases still exhibit this bug. CI treats `BEHAVIOR_STATUS=PRESENT` as success; if behavior changes to `BUG_STATUS=FIXED` the workflow fails intentionally so this repo can be updated. Releases are pinned (not floating tags) so the badge reflects a stable reproduction.
 
 Also see:
 
