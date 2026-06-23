@@ -1,6 +1,6 @@
 # OpenSearch Duplicate `_name` matched_queries Bug Reproduction
 
-[![Test OpenSearch Named Queries Duplicate _name Bug](https://github.com/REPLACE_ME/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml/badge.svg)](https://github.com/REPLACE_ME/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml)
+[![Test OpenSearch Named Queries Duplicate _name Bug](https://github.com/camerondurham/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml/badge.svg)](https://github.com/REPLACE_ME/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml)
 
 When two sibling clauses in the same `bool` query share the same `_name`, OpenSearch silently drops one clause at parse time. Any hit whose only matching named clause was the dropped one comes back with the `matched_queries` field entirely absent (the key is missing, not empty).
 
