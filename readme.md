@@ -1,36 +1,29 @@
 # OpenSearch Duplicate `_name` matched_queries Bug Reproduction
 
-This status badge "passing" means the pinned OpenSearch releases still drop the `matched_queries` field on hits whose only matching clause used a duplicated `_name`.
-
 [![Test OpenSearch Named Queries Duplicate _name Bug](https://github.com/REPLACE_ME/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml/badge.svg)](https://github.com/REPLACE_ME/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml)
 
-This repo contains a deterministic 3-document test that demonstrates: when two sibling clauses in the same `bool` share the same `_name`, OpenSearch silently drops one clause at parse time, and any hit whose only matching named clause was the dropped one is returned with the `matched_queries` field entirely absent (the key is missing, not empty).
+When two sibling clauses in the same `bool` query share the same `_name`, OpenSearch silently drops one clause at parse time. Any hit whose only matching named clause was the dropped one comes back with the `matched_queries` field entirely absent (the key is missing, not empty).
 
-GitHub Actions currently treats `BUG_STATUS=PRESENT` as a passing result. If the behavior changes to `BUG_STATUS=FIXED`, the workflow fails intentionally so this repo can be updated to reflect the fix.
-
-CI pins explicit OpenSearch releases instead of floating tags so the badge reflects a stable reproduction rather than upstream tag drift.
+A passing badge means the pinned OpenSearch releases still exhibit this bug. CI treats `BUG_STATUS=PRESENT` as success; if behavior changes to `BUG_STATUS=FIXED` the workflow fails intentionally so this repo can be updated. Releases are pinned (not floating tags) so the badge reflects a stable reproduction.
 
 Also see:
 
-- OpenSearch named queries documentation: https://opensearch.org/docs/latest/query-dsl/named-queries/
-- Related Elasticsearch issues for the same code lineage:
-  - [elastic/elasticsearch#6496](https://github.com/elastic/elasticsearch/issues/6496) - Named queries (_name) are inconsistent and the documentation is wrong
+- OpenSearch named queries docs: https://opensearch.org/docs/latest/query-dsl/named-queries/
+- Elasticsearch issues describing this exact duplicate-`_name` drop (same code lineage):
   - [elastic/elasticsearch#26417](https://github.com/elastic/elasticsearch/issues/26417) - Named queries return documents with no `matched_queries`
   - [elastic/elasticsearch#101480](https://github.com/elastic/elasticsearch/issues/101480) - Inconsistent behaviour for `matched_queries` field
+- Broader `_name` inconsistencies (different subject - parser placement / which queries accept `_name`, not the duplicate-name drop):
+  - [elastic/elasticsearch#6496](https://github.com/elastic/elasticsearch/issues/6496) - Named queries (_name) are inconsistent and the documentation is wrong
 
 ## Bug Description
 
 OpenSearch source path:
 
-- `server/src/main/java/org/opensearch/index/query/AbstractQueryBuilder.java` reads `_name` and calls `context.addNamedQuery(name, query)` during `toQuery()`.
-- `server/src/main/java/org/opensearch/index/query/QueryShardContext.java` stores named queries in `Map<String, Query> namedQueries = new HashMap<>()`. `addNamedQuery` calls `put(name, query)` - last writer wins, no error and no warning.
-- `server/src/main/java/org/opensearch/search/fetch/subphase/MatchedQueriesPhase.java` iterates the surviving name -> query map per hit. The overwritten clause is never evaluated.
+- `AbstractQueryBuilder.java` reads `_name` and calls `context.addNamedQuery(name, query)` during `toQuery()`.
+- `QueryShardContext.java` stores named queries in a `HashMap<String, Query>`. `addNamedQuery` does `put(name, query)` - last writer wins, no error or warning.
+- `MatchedQueriesPhase.java` iterates the surviving name -> query map per hit, so the overwritten clause is never evaluated.
 
-Effect:
-
-- The first clause's `Query` object is silently overwritten by the second clause's `Query` object.
-- Hits that only matched the overwritten (first) clause are returned with `matched_queries` absent entirely.
-- This is deterministic per shard. The behavior may look intermittent at scale because top-N shard sampling varies which docs the caller actually sees.
+The first clause's `Query` is silently overwritten by the second's, so hits that only matched the overwritten clause return without `matched_queries`. This is deterministic per shard, but can look intermittent at scale because top-N shard sampling varies which docs the caller sees.
 
 ## Running the Test
 
@@ -39,26 +32,29 @@ Effect:
 ./test-named-queries-bug.sh 2.19.2
 ```
 
-The script will:
-- Start a single-shard OpenSearch container at the given version (or use one already on `localhost:9200`)
-- Create an index with two `keyword` fields (`field_a`, `field_b`) and `number_of_shards: 1`
-- Index three documents:
-  - `doc_a`: `field_a=alpha`, `field_b=ZZZ` - matches clause-on-`field_a` only
-  - `doc_b`: `field_a=ZZZ`, `field_b=beta` - matches clause-on-`field_b` only
-  - `doc_c`: `field_a=alpha`, `field_b=beta` - matches both clauses
-- Run two `bool.should` searches against those docs and print `matched_queries` per hit:
-  - DUP case: both clauses use `_name="shared"`
-  - DISTINCT case: clauses use `_name="clause_a"` and `_name="clause_b"`
-- Set `BUG_STATUS=PRESENT|FIXED|UNEXPECTED` and write to `test-results.txt`
+The script starts a single-shard OpenSearch container at the given version (or reuses one on `localhost:9200`), creates an index with two `keyword` fields (`field_a`, `field_b`), and indexes three docs:
+
+- `doc_a`: `field_a=alpha`, `field_b=ZZZ` - matches the `field_a` clause only
+- `doc_b`: `field_a=ZZZ`, `field_b=beta` - matches the `field_b` clause only
+- `doc_c`: `field_a=alpha`, `field_b=beta` - matches both clauses
+
+It then runs two `bool.should` searches and prints `matched_queries` per hit:
+
+- DUP: both clauses use `_name="shared"`
+- DISTINCT: clauses use `_name="clause_a"` and `_name="clause_b"`
+
+Results are written to `test-results.txt` with `BUG_STATUS=PRESENT|FIXED|UNEXPECTED`.
 
 ## Expected vs Actual Behavior
 
-Expected (per OpenSearch documentation):
+Expected (per OpenSearch docs):
 
-- DUP case: every hit (`doc_a`, `doc_b`, `doc_c`) should include `matched_queries: ["shared"]`.
-- DISTINCT case: `doc_a` -> `["clause_a"]`, `doc_b` -> `["clause_b"]`, `doc_c` -> `["clause_a", "clause_b"]`.
+- DUP: every hit includes `matched_queries: ["shared"]`.
+- DISTINCT: `doc_a` -> `["clause_a"]`, `doc_b` -> `["clause_b"]`, `doc_c` -> `["clause_a", "clause_b"]`.
 
 Actual (in pinned CI releases):
 
-- DUP case: `doc_a` is returned WITHOUT a `matched_queries` field at all (the key is absent, not empty). `doc_b` and `doc_c` carry `["shared"]` because the surviving registered query is the second clause and they match it.
-- DISTINCT case: every hit carries the expected names. This is the control - it confirms the missing field in the DUP case is caused by the duplicate `_name` and not by anything else.
+- DUP: `doc_a` comes back WITHOUT a `matched_queries` field. `doc_b` and `doc_c` carry `["shared"]` because the surviving query is the second clause, which they match.
+- DISTINCT: every hit carries the expected names. This control confirms the missing field in the DUP case is caused by the duplicate `_name`.
+
+The missing-key property holds regardless of serialization form: on 2.19.2/3.1.0 with `include_named_queries_score=true`, `matched_queries` serializes as an object of name -> score rather than an array, but both forms are gated on a non-empty match set, so the key is still omitted entirely for hits with no surviving named match. (1.3.20 predates the score option and always uses the array form.)
