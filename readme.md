@@ -1,10 +1,8 @@
 # OpenSearch Duplicate `_name` matched_queries Reproduction
 
-[![Test OpenSearch Named Queries Duplicate _name](https://github.com/camerondurham/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml/badge.svg)](https://github.com/REPLACE_ME/opensearch-named-queries-repro/actions/workflows/test-opensearch.yml)
-
 When two sibling clauses in the same `bool` query share the same `_name`, OpenSearch drops one clause at parse time. Any hit whose only matching named clause was the dropped one comes back with the `matched_queries` field entirely absent (the key is missing, not empty).
 
-A passing badge means the pinned OpenSearch releases still exhibit this bug. CI treats `BEHAVIOR_STATUS=PRESENT` as success; if behavior changes to `BUG_STATUS=FIXED` the workflow fails intentionally so this repo can be updated. Releases are pinned (not floating tags) so the badge reflects a stable reproduction.
+CI runs on repository changes and manual dispatches. It treats `BUG_STATUS=PRESENT` as success; if behavior changes to `BUG_STATUS=FIXED`, the workflow fails intentionally so this repo can be updated. The matrix keeps OpenSearch 1.3.20 as a historical baseline and tests the latest maintained 2.x and current 3.x releases. Because releases are pinned, rerunning the same commit confirms reproducibility; update the matrix to test newly released versions.
 
 Also see:
 
@@ -29,7 +27,7 @@ The first clause's `Query` is silently overwritten by the second's, so hits that
 
 ```bash
 # run against a specific OpenSearch release tag
-./test-named-queries-bug.sh 2.19.2
+./test-named-queries-bug.sh 3.8.0
 ```
 
 The script starts a single-shard OpenSearch container at the given version (or reuses one on `localhost:9200`), creates an index with two `keyword` fields (`field_a`, `field_b`), and indexes three docs:
@@ -57,4 +55,4 @@ Actual (in pinned CI releases):
 - DUP: `doc_a` comes back WITHOUT a `matched_queries` field. `doc_b` and `doc_c` carry `["shared"]` because the surviving query is the second clause, which they match.
 - DISTINCT: every hit carries the expected names. This control confirms the missing field in the DUP case is caused by the duplicate `_name`.
 
-The missing-key property holds regardless of serialization form: on 2.19.2/3.1.0 with `include_named_queries_score=true`, `matched_queries` serializes as an object of name -> score rather than an array, but both forms are gated on a non-empty match set, so the key is still omitted entirely for hits with no surviving named match. (1.3.20 predates the score option and always uses the array form.)
+The missing-key property holds regardless of serialization form: on 2.19.6/3.8.0 with `include_named_queries_score=true`, `matched_queries` serializes as an object of name -> score rather than an array, but both forms are gated on a non-empty match set, so the key is still omitted entirely for hits with no surviving named match. (1.3.20 predates the score option and always uses the array form.)

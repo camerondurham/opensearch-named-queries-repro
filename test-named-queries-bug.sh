@@ -3,7 +3,7 @@
 set -euo pipefail
 
 OPENSEARCH_URL="http://localhost:9200"
-OPENSEARCH_VERSION=${1:-"2.19.2"}
+OPENSEARCH_VERSION=${1:-"2.19.6"}
 TEST_RESULTS_FILE=${TEST_RESULTS_FILE:-"test-results.txt"}
 INDEX_NAME=${INDEX_NAME:-"repro_named_queries"}
 OPENSEARCH_CONTAINER_ID=""
